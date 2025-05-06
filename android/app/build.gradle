@@ -104,6 +104,7 @@ android {
     }
     android.applicationVariants.all { variant ->
         variant.outputs.all {
+            def versionName = variant.versionName.replace('.', '-')
             outputFileName = "waiter-app-${variant.name}.apk"
         }
     }

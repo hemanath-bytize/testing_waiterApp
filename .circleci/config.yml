@@ -3,9 +3,9 @@ orbs:
   slack: circleci/slack@4.12.5
 
 defaults: &defaults
-    working_directory: ~/waiter-app-build
-    docker:
-      - image: reactnativecommunity/react-native-android
+  working_directory: ~/waiter-app-build
+  docker:
+    - image: reactnativecommunity/react-native-android
 
 jobs:
   build:
@@ -13,169 +13,141 @@ jobs:
       envCmd:
         type: string
         default: echo 'production'
-    <<: *defaults
-    steps:
-      - checkout
-      - when:
-          condition: 
-              equal: [<< parameters.envCmd >> ]
-          steps:
-            - run: << parameters.envCmd >>
-      - run: npm i
-      - run:
-          name: Check package.json versions
-          command: |
-            # Extract current version
-            # current_app_version=$(grep '"appVersion"' package.json | head -1 | sed -E 's/.*"appVersion": "([^"]+)".*/\1/')
-            current_version=$(grep '"version"' package.json | head -1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
-            # Extract previous version from git history
-            prev_package_json=$(git show HEAD~1:package.json)
-            prev_version=$(echo "$prev_package_json" | grep '"version"' | head -1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
-
-            echo "Previous version: $prev_version"
-            echo "Current version: $current_version"
-
-            # if [ "$prev_version" != "$current_version" ]; then
-              echo "Version changed. Generating build..."
-              # Add your build command here
-              # Example: npx react-native run-android
-              cd android
-              chmod +x gradlew
-              ./gradlew clean
-              ./gradlew --no-daemon assembleRelease
-             
-              APK_PATH=./app/build/outputs/apk/release/waiter-app-release.apk
-
-              if [ -f "$APK_PATH" ]; then
-
-                BRANCH_NAME=${CIRCLE_BRANCH:-development} 
-                if [ "$BRANCH_NAME" == "main" ]; then
-                  NEW_APK_NAME="waiter-release-${current_version}.apk" 
-                else
-                  NEW_APK_NAME="waiter-staging-${current_version}.apk"
-                fi
-                 # Default to 'development' if branch is not set
-               
-                mv "$APK_PATH" "./app/build/outputs/apk/release/$NEW_APK_NAME"
-                
-                #upload to slack
-                # curl -F file=@"$APK_PATH" -F channels=$WAITER_APP_CHANNEL_ID \
-                curl -F file=@"./app/build/outputs/apk/release/$NEW_APK_NAME" -F channels=$SLACK_WAITER_APP_CHANNEL_ID \
-                -H "Authorization: Bearer $SLACK_TOKEN" https://slack.com/api/files.upload || { echo "File upload to Slack failed! Exiting..."; exit 1; }
-
-                # Send a success message to Slack with both appVersion and version
-
-                curl -X POST -H "Authorization: Bearer $SLACK_TOKEN" \
-                -H "Content-type: application/json" \
-                --data '{"channel":"'$SLACK_WAITER_APP_CHANNEL_ID'","text":"Build successful for version: '$current_version'"}' \
-                https://slack.com/api/chat.postMessage || { echo "Failed to send success message to Slack! Exiting..."; exit 1; }
-               else
-                 echo "APK file not found at $APK_PATH! Exiting...."
-                 exit 1
-              fi
-            # else
-            #   echo "Version unchanged. Generating bundle for code push..."
-            #   npm run codepush:install
-            #   sudo apt-get install -y watchman
-            #   appcenter login --token $CODE_PUSH
-            #   npm run deploy:probytz:staging
-
-            #    # Send a CodePush success message with both appVersion and version
-            #   curl -X POST -H "Authorization: Bearer $SLACK_TOKEN" \
-            #   -H "Content-type: application/json" \
-            #   --data '{"channel":"'$SLACK_WAITER_APP_CHANNEL_ID'","text":"CodePush deployment successful for version: '$current_version'"}' \
-            #   https://slack.com/api/chat.postMessage || { echo "Failed to send CodePush message to Slack! Exiting..."; exit 1; }
-            # fi
-      # - run:
-      #     name: Build Android Release
-      #     command: |
-      #       cd android
-      #       chmod +x gradlew
-      #       ./gradlew --no-daemon assembleRelease
-      # - run :
-      #     name: upload to slack
-      #     command: | 
-      #       curl -F file=@"android/app/build/outputs/apk/release/waiter-app-release.apk" -F channels=$SLACK_BILLING_APP_CHANNEL_ID -H "Authorization: Bearer $SLACK_TOKEN" https://slack.com/api/files.upload
-  itsolver:
-    parameters:
-      envCmd:
+      white-label:
         type: string
-        default: echo 'production'
+        default: "posbytz"
+      patner:
+        type: string
+        default: "Posbytz"
+      build-type:
+        type: string
+        default: "apk" # can be "apk" or "codepush"
     <<: *defaults
     steps:
       - checkout
-      - when:
-          condition: 
-              equal: [<< parameters.envCmd >> ]
-          steps:
-            - run: << parameters.envCmd >>
-      - run: npm i
+      
+      # Setup environment
       - run:
-          name: Check package.json versions
+          name: Setup environment
+          command: << parameters.envCmd >>
+      
+      # Install dependencies
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "package.json" }}
+            - v1-dependencies-
+      - run:
+          name: Install dependencies
+          command: npm i
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+      
+      # Build logic
+      - run:
+          name: Build and deploy
           command: |
-            # Extract current version
-            # current_app_version=$(grep '"appVersion"' package.json | head -1 | sed -E 's/.*"appVersion": "([^"]+)".*/\1/')
-            current_version=$(grep '"version"' package.json | head -1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
-            # Extract previous version from git history
-            prev_package_json=$(git show HEAD~1:package.json)
-            prev_version=$(echo "$prev_package_json" | grep '"version"' | head -1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
-
-            echo "Previous version: $prev_version"
-            echo "Current version: $current_version"
-
-            echo "Version changed. Generating build..."
-              # Add your build command here
-              # Example: npx react-native run-android
+            current_version=$(jq -r '.version' package.json)
+            current_app_version=$(jq -r '.appVersion' package.json)
+            echo "Building << parameters.white-label >> v$current_version"
+            
+            if [[ "<< parameters.build-type >>" == "apk" ]]; then
+              echo "Building APK..."
               cd android
               chmod +x gradlew
               ./gradlew clean
-              ./gradlew --no-daemon assembleItsolverRelease
-             
-              APK_PATH=./app/build/outputs/apk/release/waiter-app-release.apk
-
+              ./gradlew --no-daemon assemble<< parameters.patner >>Release
+              
+              APK_PATH=$(find ./app/build/outputs/apk/<< parameters.white-label >>/release -name "*apk" | head -n 1)
+              
               if [ -f "$APK_PATH" ]; then
-
-                NEW_APK_NAME="waiter-release-${current_version}.apk" 
-                 # Default to 'development' if branch is not set
-               
-                mv "$APK_PATH" "./app/build/outputs/apk/release/$NEW_APK_NAME"
+                BRANCH_NAME=${CIRCLE_BRANCH:-development}
                 
-                #upload to slack
-                # curl -F file=@"$APK_PATH" -F channels=$WAITER_APP_CHANNEL_ID \
-                curl -F file=@"./app/build/outputs/apk/release/$NEW_APK_NAME" -F channels=$SLACK_WAITER_APP_CHANNEL_ID \
-                -H "Authorization: Bearer $SLACK_TOKEN" https://slack.com/api/files.upload || { echo "File upload to Slack failed! Exiting..."; exit 1; }
-
-                # Send a success message to Slack with both appVersion and version
-
+                if [ "$BRANCH_NAME" == "main" ]; then
+                  NEW_APK_NAME="waiter-<< parameters.white-label >>-release-${current_version//./-}.apk"
+                else
+                  NEW_APK_NAME="waiter-<< parameters.white-label >>-staging-${current_version//./-}.apk"
+                fi
+                
+                mv "$APK_PATH" "./app/build/outputs/apk/$NEW_APK_NAME"
+                
+                # Upload to Slack
+                curl -F file=@"./app/build/outputs/apk/$NEW_APK_NAME" -F channels=$SLACK_WAITER_APP_CHANNEL_ID \
+                  -H "Authorization: Bearer $SLACK_TOKEN" https://slack.com/api/files.upload || \
+                  { echo "File upload to Slack failed!"; exit 1; }
+                
+                # Send success message
                 curl -X POST -H "Authorization: Bearer $SLACK_TOKEN" \
-                -H "Content-type: application/json" \
-                --data '{"channel":"'$SLACK_WAITER_APP_CHANNEL_ID'","text":"Build successful for version: '$current_version'"}' \
-                https://slack.com/api/chat.postMessage || { echo "Failed to send success message to Slack! Exiting..."; exit 1; }
-               else
-                 echo "APK file not found at $APK_PATH! Exiting...."
-                 exit 1
+                  -H "Content-type: application/json" \
+                  --data '{"channel":"'$SLACK_WAITER_APP_CHANNEL_ID'","text":"<< parameters.white-label >> APK build successful\nVersion: '$current_version'\nApp Version: '$current_app_version'"}' \
+                  https://slack.com/api/chat.postMessage || { echo "Failed to send success message to Slack!"; exit 1; }
+              else
+                echo "APK not found!"
+                exit 1
               fi
+            
+            elif [[ "<< parameters.build-type >>" == "codepush" ]]; then
+              echo "Deploying CodePush..."
+              npm run codepush:install
+              sudo apt-get install -y watchman
+              appcenter login --token $CODE_PUSH
+              
+              # Determine CodePush command based on white-label
+              npm run codepush:android:<< parameters.white-label >>:staging
+              
+              curl -X POST -H "Authorization: Bearer $SLACK_TOKEN" \
+                -H "Content-type: application/json" \
+                --data '{"channel":"'$SLACK_WAITER_APP_CHANNEL_ID'","text":"<< parameters.white-label >> CodePush deployed\nVersion: '$current_version'\nApp Version: '$current_app_version'"}' \
+                https://slack.com/api/chat.postMessage || { echo "Failed to send CodePush message to Slack!"; exit 1; }
+            fi
+
 workflows:
-  build-staging:
+  version: 2
+  build-deploy:
     jobs:
+      # Posbytz builds
       - build:
+          name: posbytz-staging-apk
           context: waiter-app
-          envCmd:
+          envCmd: npm run posbytz:staging
+          white-label: posbytz
+          build-type: apk
+          patner: Posbytz
           filters:
             branches:
               only:
-                - sathish/dev-I
-
-  build-production:
-    jobs:
-      - build:
-          context: waiter-app
-          filters:
-            branches:
-              only: main
-      - itsolver:
-          context: waiter-app
-          envCmd: npm run itsolver:prod
-          filters:
-            branches:
-              only: main
+                - main
+      
+      # Itsolver builds
+      # - build:
+      #     name: itsolver-production-apk
+      #     context: waiter-app
+      #     envCmd: npm run itsolver:prod
+      #     white-label: itsolver
+      #     build-type: apk
+      #     filters:
+      #       branches:
+      #         only: main
+      
+      # Aelia builds (example - add commands to package.json)
+      # - build:
+      #     name: aelia-production-apk
+      #     context: waiter-app
+      #     envCmd: npm run aelia:prod
+      #     white-label: aelia
+      #     build-type: apk
+      #     filters:
+      #       branches:
+      #         only: main
+      
+      # Prosumpos builds (example - add commands to package.json)
+      # - build:
+      #     name: prosumpos-production-apk
+      #     context: waiter-app
+      #     envCmd: npm run prosumpos:prod
+      #     white-label: prosumpos
+      #     build-type: apk
+      #     filters:
+      #       branches:
+      #         only: main
