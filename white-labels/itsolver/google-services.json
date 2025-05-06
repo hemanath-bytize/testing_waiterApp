@@ -1,0 +1,29 @@
+{
+    "project_info": {
+    "project_number": "238300822394",
+    "project_id": "it-solver-billing-app",
+    "storage_bucket": "it-solver-billing-app.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+              "mobilesdk_app_id": "1:238300822394:android:b17967541491b2649974c3",
+              "android_client_info": {
+                "package_name": "com.itsolver.waiter"
+              }
+            },
+            "oauth_client": [],
+            "api_key": [
+              {
+                "current_key": "AIzaSyAklgRDRhFE3j-YrW9u6N_hQ1kLtpc9gmU"
+              }
+            ],
+            "services": {
+              "appinvite_service": {
+                "other_platform_oauth_client": []
+              }
+            }
+        }
+    ],
+    "configuration_version": "1"
+  }

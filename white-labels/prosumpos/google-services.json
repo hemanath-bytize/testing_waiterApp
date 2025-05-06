@@ -1,0 +1,30 @@
+{
+    "project_info": {
+      "project_number": "618622680967",
+      "project_id": "prosum-pos",
+      "storage_bucket": "prosum-pos.firebasestorage.app"
+    },
+    "client": [
+      {
+        "client_info": {
+          "mobilesdk_app_id": "1:618622680967:android:68370a6a733e47048b5d22",
+          "android_client_info": {
+            "package_name": "com.prosumpos.waiter"
+          }
+        },
+        "oauth_client": [],
+        "api_key": [
+          {
+            "current_key": "AIzaSyDLplBXGwZubdSu646urNl2EArG62ktlEU"
+          }
+        ],
+        "services": {
+          "appinvite_service": {
+            "other_platform_oauth_client": []
+          }
+        }
+      }
+    ],
+    "configuration_version": "1"
+  }
+  
